@@ -1,0 +1,6 @@
+django
+memwal
+httpx
+python-dotenv
+whitenoise
+gunicorn
