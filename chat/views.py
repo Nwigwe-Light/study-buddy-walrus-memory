@@ -44,6 +44,7 @@ def log_friction(note):
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     with open(FRICTION_LOG, "a", encoding="utf-8") as f:
         f.write(f"[{stamp}] {note}\n")
+        print(f"[{stamp}] {note}", flush=True)
 
 
 def make_slug(name):
