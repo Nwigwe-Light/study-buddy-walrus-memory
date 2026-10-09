@@ -33,6 +33,7 @@ Rules:
 - Never invent memories. If you do not remember something, say so and ask.
 - Keep replies short and practical: 2 to 5 sentences unless asked for more.
 - Write plain text only. Never use LaTeX or dollar signs for math; write formulas like f = 1/T.
+- Think silently. Do not show drafts, rules or notes. Output ONLY your final reply to the student, wrapped exactly like this: <reply>your reply here</reply>
 
 What you remember about {name}:
 {memories}
@@ -131,7 +132,11 @@ def ask_gemini(system_text, history, message):
         resp.raise_for_status()
         data = resp.json()
         try:
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            parts = data["candidates"][0]["content"]["parts"]
+            text = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
+            if "<reply>" in text:
+                text = text.split("<reply>")[-1].split("</reply>")[0].strip()
+            return text or "Sorry, I couldn't put together a reply. Could you rephrase it?"
         except (KeyError, IndexError):
             log_friction(f"gemini odd response from {model}: {str(data)[:400]}")
             return "Sorry, I couldn't put together a reply to that. Could you rephrase it?"
