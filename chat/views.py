@@ -96,7 +96,7 @@ def store_memory(slug, text):
 def ask_gemini(system_text, history, message):
     models = [
         m.strip()
-        for m in os.environ.get("GEMINI_MODEL", "gemini-3.5-flash").split(",")
+        for m in os.environ.get("GEMINI_MODEL", "gemma-3-27b-it").split(",")
         if m.strip()
     ]
     contents = [
@@ -106,13 +106,17 @@ def ask_gemini(system_text, history, message):
         }
         for m in history[-6:]
     ]
-    contents.append({"role": "user", "parts": [{"text": message}]})
-    body = {
-        "system_instruction": {"parts": [{"text": system_text}]},
-        "contents": contents,
-    }
     last_status = None
     for model in models:
+        if model.startswith("gemma"):
+            # Gemma has no system-instruction field, so put the rules in the message.
+            full = f"{system_text}\n\nStudent's new message:\n{message}"
+            body = {"contents": contents + [{"role": "user", "parts": [{"text": full}]}]}
+        else:
+            body = {
+                "system_instruction": {"parts": [{"text": system_text}]},
+                "contents": contents + [{"role": "user", "parts": [{"text": message}]}],
+            }
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         resp = httpx.post(
             url,
@@ -120,7 +124,7 @@ def ask_gemini(system_text, history, message):
             headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"]},
             timeout=60,
         )
-        if resp.status_code in (404, 429, 500, 503):
+        if resp.status_code in (400, 404, 429, 500, 503):
             last_status = resp.status_code
             log_friction(f"gemini model={model} status={resp.status_code}, trying next model")
             continue
@@ -131,7 +135,7 @@ def ask_gemini(system_text, history, message):
         except (KeyError, IndexError):
             log_friction(f"gemini odd response from {model}: {str(data)[:400]}")
             return "Sorry, I couldn't put together a reply to that. Could you rephrase it?"
-    raise RuntimeError(f"All Gemini models busy (last status {last_status})")
+    raise RuntimeError(f"All models failed (last status {last_status})")
 
 def index(request):
     if request.session.get("name"):
