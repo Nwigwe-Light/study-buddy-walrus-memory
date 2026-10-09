@@ -136,6 +136,10 @@ def ask_gemini(system_text, history, message):
             text = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
             if "<reply>" in text:
                 text = text.split("<reply>")[-1].split("</reply>")[0].strip()
+            elif '"' in text:
+                quoted = re.findall(r'"([^"]{20,})"', text)
+                if quoted:
+                    text = quoted[-1].strip()
             return text or "Sorry, I couldn't put together a reply. Could you rephrase it?"
         except (KeyError, IndexError):
             log_friction(f"gemini odd response from {model}: {str(data)[:400]}")
