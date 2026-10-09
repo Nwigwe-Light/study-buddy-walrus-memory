@@ -45,6 +45,7 @@ def log_friction(note):
     with open(FRICTION_LOG, "a", encoding="utf-8") as f:
         f.write(f"[{stamp}] {note}\n")
         print(f"[{stamp}] {note}", flush=True)
+        
 
 
 def make_slug(name):
@@ -104,12 +105,18 @@ def ask_gemini(system_text, history, message):
         "system_instruction": {"parts": [{"text": system_text}]},
         "contents": contents,
     }
-    resp = httpx.post(
-        url,
-        json=body,
-        headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"]},
-        timeout=60,
-    )
+    resp = None
+    for attempt in range(3):
+        resp = httpx.post(
+            url,
+            json=body,
+            headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"]},
+            timeout=60,
+        )
+        if resp.status_code not in (429, 500, 503):
+            break
+        log_friction(f"gemini retry status={resp.status_code} attempt={attempt + 1}")
+        time.sleep(2 * (attempt + 1))
     resp.raise_for_status()
     data = resp.json()
     return data["candidates"][0]["content"]["parts"][0]["text"]
