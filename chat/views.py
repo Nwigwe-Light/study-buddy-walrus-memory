@@ -40,12 +40,15 @@ What you remember about {name}:
 
 
 def log_friction(note):
-    """Append a timestamped line to friction_log.txt (used for the bug report)."""
+    """Print and append a timestamped line (used for the bug report)."""
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    with open(FRICTION_LOG, "a", encoding="utf-8") as f:
-        f.write(f"[{stamp}] {note}\n")
-        print(f"[{stamp}] {note}", flush=True)
-        
+    line = f"[{stamp}] {note}"
+    print(line, flush=True)
+    try:
+        with open(FRICTION_LOG, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
 
 
 def make_slug(name):
@@ -119,7 +122,11 @@ def ask_gemini(system_text, history, message):
         time.sleep(2 * (attempt + 1))
     resp.raise_for_status()
     data = resp.json()
-    return data["candidates"][0]["content"]["parts"][0]["text"]
+    try:
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError):
+        log_friction(f"gemini odd response: {str(data)[:400]}")
+        return "Sorry, I couldn't put together a reply to that. Could you rephrase it?"
 
 
 def index(request):
