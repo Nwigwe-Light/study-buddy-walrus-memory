@@ -94,8 +94,11 @@ def store_memory(slug, text):
 
 
 def ask_gemini(system_text, history, message):
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    models = [
+        m.strip()
+        for m in os.environ.get("GEMINI_MODEL", "gemini-3.5-flash").split(",")
+        if m.strip()
+    ]
     contents = [
         {
             "role": "user" if m.get("role") == "user" else "model",
@@ -108,26 +111,27 @@ def ask_gemini(system_text, history, message):
         "system_instruction": {"parts": [{"text": system_text}]},
         "contents": contents,
     }
-    resp = None
-    for attempt in range(3):
+    last_status = None
+    for model in models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         resp = httpx.post(
             url,
             json=body,
             headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"]},
             timeout=60,
         )
-        if resp.status_code not in (429, 500, 503):
-            break
-        log_friction(f"gemini retry status={resp.status_code} attempt={attempt + 1}")
-        time.sleep(2 * (attempt + 1))
-    resp.raise_for_status()
-    data = resp.json()
-    try:
-        return data["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError):
-        log_friction(f"gemini odd response: {str(data)[:400]}")
-        return "Sorry, I couldn't put together a reply to that. Could you rephrase it?"
-
+        if resp.status_code in (404, 429, 500, 503):
+            last_status = resp.status_code
+            log_friction(f"gemini model={model} status={resp.status_code}, trying next model")
+            continue
+        resp.raise_for_status()
+        data = resp.json()
+        try:
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        except (KeyError, IndexError):
+            log_friction(f"gemini odd response from {model}: {str(data)[:400]}")
+            return "Sorry, I couldn't put together a reply to that. Could you rephrase it?"
+    raise RuntimeError(f"All Gemini models busy (last status {last_status})")
 
 def index(request):
     if request.session.get("name"):
